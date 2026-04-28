@@ -1,22 +1,19 @@
 --[[
 =====================================================================
     SIFT UI LIBRARY
-    Version: 1.0.0
-    A clean, modern Roblox UI library — black & blue theme.
+    Version: 1.1.0
+    Mostly-black theme with fluorescent blue accents.
     
     Loader:
         local Sift = loadstring(game:HttpGet("YOUR_RAW_URL/Sift.lua"))()
-    
-    See SiftDocs.md for full API reference.
 =====================================================================
 ]]
 
 local Sift = {}
 Sift.__index = Sift
-Sift.Version = "1.0.0"
-Sift.Flags = {}        -- holds element values keyed by Flag
-Sift.Windows = {}      -- registered windows
-Sift._notifications = {}
+Sift.Version = "1.1.0"
+Sift.Flags = {}
+Sift.Windows = {}
 
 -- =====================================================================
 -- SERVICES
@@ -27,32 +24,30 @@ local TweenService     = game:GetService("TweenService")
 local RunService       = game:GetService("RunService")
 local CoreGui          = game:GetService("CoreGui")
 local HttpService      = game:GetService("HttpService")
-local StarterGui       = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
-local Mouse       = LocalPlayer:GetMouse()
 
 -- =====================================================================
--- THEME (black & blue)
+-- THEME (mostly black, fluorescent blue accents)
 -- =====================================================================
 Sift.Theme = {
-    -- backgrounds
-    Background      = Color3.fromRGB(8, 10, 14),     -- darkest
-    Surface         = Color3.fromRGB(14, 17, 24),    -- cards / sidebar
-    SurfaceLight    = Color3.fromRGB(20, 25, 35),    -- elements
-    SurfaceHover    = Color3.fromRGB(28, 34, 48),    -- hover state
-    Border          = Color3.fromRGB(30, 38, 55),
+    -- mostly very dark black backgrounds
+    Background      = Color3.fromRGB(6, 7, 10),       -- darkest body
+    Surface         = Color3.fromRGB(10, 12, 16),     -- titlebar / sidebar
+    SurfaceLight    = Color3.fromRGB(16, 19, 25),     -- element cards
+    SurfaceHover    = Color3.fromRGB(22, 26, 34),
+    Border          = Color3.fromRGB(22, 28, 40),     -- subtle inner borders
 
-    -- accents (blue)
-    Accent          = Color3.fromRGB(45, 140, 255),  -- primary blue
+    -- blue accents (used sparingly: sliders, toggles, buttons, dropdowns)
+    Accent          = Color3.fromRGB(45, 140, 255),
     AccentHover     = Color3.fromRGB(75, 165, 255),
     AccentDim       = Color3.fromRGB(30, 95, 175),
-    AccentGlow      = Color3.fromRGB(100, 200, 255),
+    AccentGlow      = Color3.fromRGB(120, 200, 255),  -- fluorescent edge
 
     -- text
-    TextPrimary     = Color3.fromRGB(240, 244, 255),
-    TextSecondary   = Color3.fromRGB(160, 175, 200),
-    TextMuted       = Color3.fromRGB(95, 110, 135),
+    TextPrimary     = Color3.fromRGB(235, 240, 250),
+    TextSecondary   = Color3.fromRGB(150, 160, 180),
+    TextMuted       = Color3.fromRGB(85, 95, 115),
     TextOnAccent    = Color3.fromRGB(255, 255, 255),
 
     -- status
@@ -70,7 +65,6 @@ Sift.Theme = {
 -- INTERNAL HELPERS
 -- =====================================================================
 local function safeParent(gui)
-    -- Try CoreGui first (executors), fallback to PlayerGui (Studio)
     local ok = pcall(function()
         if syn and syn.protect_gui then
             syn.protect_gui(gui)
@@ -90,16 +84,12 @@ local function new(class, props, children)
     local inst = Instance.new(class)
     if props then
         for k, v in pairs(props) do
-            if k ~= "Parent" then
-                inst[k] = v
-            end
+            if k ~= "Parent" then inst[k] = v end
         end
         if props.Parent then inst.Parent = props.Parent end
     end
     if children then
-        for _, c in ipairs(children) do
-            c.Parent = inst
-        end
+        for _, c in ipairs(children) do c.Parent = inst end
     end
     return inst
 end
@@ -107,7 +97,7 @@ end
 local function corner(parent, radius)
     return new("UICorner", {
         Parent = parent,
-        CornerRadius = UDim.new(0, radius or 6)
+        CornerRadius = UDim.new(0, radius or 8)
     })
 end
 
@@ -141,14 +131,12 @@ end
 local function makeDraggable(frame, dragHandle)
     dragHandle = dragHandle or frame
     local dragging, dragStart, startPos = false, nil, nil
-
     dragHandle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = frame.Position
-
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -156,7 +144,6 @@ local function makeDraggable(frame, dragHandle)
             end)
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if dragging
         and (input.UserInputType == Enum.UserInputType.MouseMovement
@@ -168,6 +155,19 @@ local function makeDraggable(frame, dragHandle)
             )
         end
     end)
+end
+
+-- Returns a Roblox content URL for the player's avatar headshot.
+local function getPlayerThumb(userId)
+    local ok, content = pcall(function()
+        return Players:GetUserThumbnailAsync(
+            userId,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size150x150
+        )
+    end)
+    if ok then return content end
+    return "rbxasset://textures/ui/GuiImagePlaceholder.png"
 end
 
 -- =====================================================================
@@ -189,27 +189,23 @@ function Sift:ShowLoading(opts)
     })
     safeParent(gui)
 
-    -- full-screen black overlay
     local overlay = new("Frame", {
         Parent = gui,
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundColor3 = Sift.Theme.Background,
         BorderSizePixel = 0,
-        BackgroundTransparency = 0,
     })
 
-    -- subtle blue glow gradient
-    local glow = new("UIGradient", {
+    new("UIGradient", {
         Parent = overlay,
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Sift.Theme.Background),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(12, 18, 32)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(10, 14, 22)),
             ColorSequenceKeypoint.new(1, Sift.Theme.Background),
         }),
         Rotation = 45,
     })
 
-    -- centered container
     local container = new("Frame", {
         Parent = overlay,
         Size = UDim2.new(0, 360, 0, 220),
@@ -218,7 +214,6 @@ function Sift:ShowLoading(opts)
         BackgroundTransparency = 1,
     })
 
-    -- LOGO (stylised "S" in a rounded square with glow)
     local logoFrame = new("Frame", {
         Parent = container,
         Size = UDim2.new(0, 64, 0, 64),
@@ -228,7 +223,6 @@ function Sift:ShowLoading(opts)
         BorderSizePixel = 0,
     })
     corner(logoFrame, 14)
-
     new("UIGradient", {
         Parent = logoFrame,
         Color = ColorSequence.new({
@@ -237,10 +231,8 @@ function Sift:ShowLoading(opts)
         }),
         Rotation = 135,
     })
-
     stroke(logoFrame, Sift.Theme.AccentGlow, 1, 0.4)
-
-    local logoText = new("TextLabel", {
+    new("TextLabel", {
         Parent = logoFrame,
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
@@ -250,8 +242,7 @@ function Sift:ShowLoading(opts)
         TextSize = 38,
     })
 
-    -- Title
-    local titleLabel = new("TextLabel", {
+    new("TextLabel", {
         Parent = container,
         Size = UDim2.new(1, 0, 0, 28),
         Position = UDim2.new(0, 0, 0, 86),
@@ -261,9 +252,7 @@ function Sift:ShowLoading(opts)
         TextColor3 = Sift.Theme.TextPrimary,
         TextSize = 22,
     })
-
-    -- Subtitle
-    local subLabel = new("TextLabel", {
+    new("TextLabel", {
         Parent = container,
         Size = UDim2.new(1, 0, 0, 18),
         Position = UDim2.new(0, 0, 0, 116),
@@ -274,7 +263,6 @@ function Sift:ShowLoading(opts)
         TextSize = 13,
     })
 
-    -- Progress bar background
     local barBg = new("Frame", {
         Parent = container,
         Size = UDim2.new(0, 280, 0, 6),
@@ -286,7 +274,6 @@ function Sift:ShowLoading(opts)
     corner(barBg, 3)
     stroke(barBg, Sift.Theme.Border, 1, 0.5)
 
-    -- Progress bar fill
     local barFill = new("Frame", {
         Parent = barBg,
         Size = UDim2.new(0, 0, 1, 0),
@@ -294,7 +281,6 @@ function Sift:ShowLoading(opts)
         BorderSizePixel = 0,
     })
     corner(barFill, 3)
-
     new("UIGradient", {
         Parent = barFill,
         Color = ColorSequence.new({
@@ -304,7 +290,6 @@ function Sift:ShowLoading(opts)
         }),
     })
 
-    -- Percentage
     local percent = new("TextLabel", {
         Parent = container,
         Size = UDim2.new(1, 0, 0, 18),
@@ -316,32 +301,26 @@ function Sift:ShowLoading(opts)
         TextSize = 13,
     })
 
-    -- pulse animation on logo
     local pulseConn
     pulseConn = RunService.RenderStepped:Connect(function()
         if not logoFrame.Parent then
             pulseConn:Disconnect()
             return
         end
-        local t = tick() * 2
-        local s = 1 + math.sin(t) * 0.04
+        local s = 1 + math.sin(tick() * 2) * 0.04
         logoFrame.Size = UDim2.new(0, 64 * s, 0, 64 * s)
     end)
 
-    -- Animate progress
     local startTime = tick()
     local conn
     conn = RunService.Heartbeat:Connect(function()
         local elapsed = tick() - startTime
         local alpha = math.min(elapsed / duration, 1)
-        local eased = 1 - (1 - alpha) ^ 3  -- ease-out cubic
-
+        local eased = 1 - (1 - alpha) ^ 3
         barFill.Size = UDim2.new(eased, 0, 1, 0)
         percent.Text = string.format("%d%%", math.floor(eased * 100))
-
         if alpha >= 1 then
             conn:Disconnect()
-            -- fade out
             task.wait(0.25)
             tween(overlay, TweenInfo.new(0.4), {BackgroundTransparency = 1})
             for _, c in ipairs(container:GetDescendants()) do
@@ -364,21 +343,20 @@ function Sift:ShowLoading(opts)
 end
 
 -- =====================================================================
--- NOTIFICATION
+-- NOTIFICATION (top-left, smaller, themed to match UI)
 -- =====================================================================
 function Sift:Notify(opts)
     opts = opts or {}
     local title    = opts.Title    or "Notification"
     local content  = opts.Content  or ""
-    local duration = opts.Duration or 4
-    local typ      = opts.Type     or "info"  -- info | success | warning | error
+    local duration = opts.Duration or 3   -- 1s shorter than before
+    local typ      = opts.Type     or "info"
 
     local accent = Sift.Theme.Accent
     if typ == "success" then accent = Sift.Theme.Success
     elseif typ == "warning" then accent = Sift.Theme.Warning
     elseif typ == "error"   then accent = Sift.Theme.Error end
 
-    -- ensure host gui exists
     if not Sift._notifyGui or not Sift._notifyGui.Parent then
         Sift._notifyGui = new("ScreenGui", {
             Name = "SiftNotifications",
@@ -390,36 +368,35 @@ function Sift:Notify(opts)
 
         Sift._notifyHolder = new("Frame", {
             Parent = Sift._notifyGui,
-            Size = UDim2.new(0, 320, 1, -40),
-            Position = UDim2.new(1, -20, 1, -20),
-            AnchorPoint = Vector2.new(1, 1),
+            Size = UDim2.new(0, 260, 1, -40),
+            Position = UDim2.new(0, 16, 0, 16),     -- TOP-LEFT
+            AnchorPoint = Vector2.new(0, 0),
             BackgroundTransparency = 1,
         })
         new("UIListLayout", {
             Parent = Sift._notifyHolder,
             FillDirection = Enum.FillDirection.Vertical,
-            VerticalAlignment = Enum.VerticalAlignment.Bottom,
-            HorizontalAlignment = Enum.HorizontalAlignment.Right,
-            Padding = UDim.new(0, 8),
+            VerticalAlignment = Enum.VerticalAlignment.Top,
+            HorizontalAlignment = Enum.HorizontalAlignment.Left,
+            Padding = UDim.new(0, 6),
             SortOrder = Enum.SortOrder.LayoutOrder,
         })
     end
 
     local notif = new("Frame", {
         Parent = Sift._notifyHolder,
-        Size = UDim2.new(1, 0, 0, 70),
+        Size = UDim2.new(1, 0, 0, 56),
         BackgroundColor3 = Sift.Theme.Surface,
         BorderSizePixel = 0,
         BackgroundTransparency = 1,
     })
     corner(notif, 8)
-    stroke(notif, Sift.Theme.Border, 1, 0)
+    local notifStroke = stroke(notif, Sift.Theme.AccentDim, 1, 0.5)
 
-    -- accent stripe
     local stripe = new("Frame", {
         Parent = notif,
-        Size = UDim2.new(0, 3, 1, -16),
-        Position = UDim2.new(0, 8, 0, 8),
+        Size = UDim2.new(0, 3, 1, -14),
+        Position = UDim2.new(0, 7, 0, 7),
         BackgroundColor3 = accent,
         BorderSizePixel = 0,
         BackgroundTransparency = 1,
@@ -428,51 +405,45 @@ function Sift:Notify(opts)
 
     local titleLbl = new("TextLabel", {
         Parent = notif,
-        Size = UDim2.new(1, -28, 0, 20),
-        Position = UDim2.new(0, 20, 0, 10),
+        Size = UDim2.new(1, -24, 0, 16),
+        Position = UDim2.new(0, 18, 0, 8),
         BackgroundTransparency = 1,
         Font = Sift.Theme.FontBold,
         Text = title,
         TextColor3 = Sift.Theme.TextPrimary,
-        TextSize = 14,
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTransparency = 1,
     })
 
     local contentLbl = new("TextLabel", {
         Parent = notif,
-        Size = UDim2.new(1, -28, 0, 32),
-        Position = UDim2.new(0, 20, 0, 30),
+        Size = UDim2.new(1, -24, 0, 28),
+        Position = UDim2.new(0, 18, 0, 24),
         BackgroundTransparency = 1,
         Font = Sift.Theme.Font,
         Text = content,
         TextColor3 = Sift.Theme.TextSecondary,
-        TextSize = 12,
+        TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top,
         TextWrapped = true,
         TextTransparency = 1,
     })
 
-    -- slide in
-    notif.Position = UDim2.new(1, 50, 0, 0)
-    tween(notif, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
-        BackgroundTransparency = 0,
-    })
-    tween(stripe,     TweenInfo.new(0.3), {BackgroundTransparency = 0})
-    tween(titleLbl,   TweenInfo.new(0.3), {TextTransparency = 0})
-    tween(contentLbl, TweenInfo.new(0.3), {TextTransparency = 0.2})
+    notif.Position = UDim2.new(0, -260, 0, 0)
+    tween(notif, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {BackgroundTransparency = 0})
+    tween(stripe, TweenInfo.new(0.25), {BackgroundTransparency = 0})
+    tween(titleLbl, TweenInfo.new(0.25), {TextTransparency = 0})
+    tween(contentLbl, TweenInfo.new(0.25), {TextTransparency = 0.2})
+    tween(notifStroke, TweenInfo.new(0.25), {Transparency = 0.3})
 
     task.delay(duration, function()
         tween(notif, TweenInfo.new(0.25), {BackgroundTransparency = 1})
         tween(stripe, TweenInfo.new(0.25), {BackgroundTransparency = 1})
         tween(titleLbl, TweenInfo.new(0.25), {TextTransparency = 1})
         tween(contentLbl, TweenInfo.new(0.25), {TextTransparency = 1})
-        for _, s in ipairs(notif:GetChildren()) do
-            if s:IsA("UIStroke") then
-                tween(s, TweenInfo.new(0.25), {Transparency = 1})
-            end
-        end
+        tween(notifStroke, TweenInfo.new(0.25), {Transparency = 1})
         task.wait(0.3)
         notif:Destroy()
     end)
@@ -485,7 +456,7 @@ function Sift:CreateWindow(opts)
     opts = opts or {}
     local title       = opts.Title       or "Sift"
     local subtitle    = opts.Subtitle    or ""
-    local size        = opts.Size        or UDim2.new(0, 560, 0, 380)
+    local size        = opts.Size        or UDim2.new(0, 580, 0, 400)
     local toggleKey   = opts.ToggleKey   or Enum.KeyCode.RightShift
 
     local gui = new("ScreenGui", {
@@ -497,6 +468,7 @@ function Sift:CreateWindow(opts)
     })
     safeParent(gui)
 
+    -- =========== MAIN CONTAINER (rounded all sides) ===========
     local main = new("Frame", {
         Parent = gui,
         Size = size,
@@ -504,29 +476,69 @@ function Sift:CreateWindow(opts)
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundColor3 = Sift.Theme.Background,
         BorderSizePixel = 0,
+        ClipsDescendants = false,
     })
-    corner(main, 10)
-    stroke(main, Sift.Theme.Border, 1, 0)
+    corner(main, 12)
 
-    -- Title bar
+    -- Fluorescent blue border
+    local mainStroke = new("UIStroke", {
+        Parent = main,
+        Color = Sift.Theme.Accent,
+        Thickness = 1.5,
+        Transparency = 0.15,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    })
+    new("UIGradient", {
+        Parent = mainStroke,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0,   Sift.Theme.AccentGlow),
+            ColorSequenceKeypoint.new(0.5, Sift.Theme.Accent),
+            ColorSequenceKeypoint.new(1,   Sift.Theme.AccentGlow),
+        }),
+        Rotation = 45,
+    })
+
+    -- Outer glow
+    local glowOuter = new("Frame", {
+        Parent = gui,
+        Size = UDim2.new(0, size.X.Offset + 8, 0, size.Y.Offset + 8),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        ZIndex = 0,
+    })
+    corner(glowOuter, 14)
+    new("UIStroke", {
+        Parent = glowOuter,
+        Color = Sift.Theme.Accent,
+        Thickness = 3,
+        Transparency = 0.75,
+    })
+    main:GetPropertyChangedSignal("Position"):Connect(function()
+        glowOuter.Position = main.Position
+    end)
+    main:GetPropertyChangedSignal("Size"):Connect(function()
+        glowOuter.Size = UDim2.new(0, main.Size.X.Offset + 8, 0, main.Size.Y.Offset + 8)
+    end)
+
+    -- =========== TITLE BAR ===========
     local titleBar = new("Frame", {
         Parent = main,
-        Size = UDim2.new(1, 0, 0, 38),
+        Size = UDim2.new(1, -2, 0, 38),
+        Position = UDim2.new(0, 1, 0, 1),
         BackgroundColor3 = Sift.Theme.Surface,
         BorderSizePixel = 0,
     })
-    corner(titleBar, 10)
-
-    -- mask the bottom corners of title bar so it joins flat with body
+    corner(titleBar, 11)
     new("Frame", {
         Parent = titleBar,
-        Size = UDim2.new(1, 0, 0, 10),
-        Position = UDim2.new(0, 0, 1, -10),
+        Size = UDim2.new(1, 0, 0, 12),
+        Position = UDim2.new(0, 0, 1, -12),
         BackgroundColor3 = Sift.Theme.Surface,
         BorderSizePixel = 0,
+        ZIndex = 1,
     })
 
-    -- mini logo
     local miniLogo = new("Frame", {
         Parent = titleBar,
         Size = UDim2.new(0, 22, 0, 22),
@@ -534,6 +546,7 @@ function Sift:CreateWindow(opts)
         AnchorPoint = Vector2.new(0, 0.5),
         BackgroundColor3 = Sift.Theme.Accent,
         BorderSizePixel = 0,
+        ZIndex = 2,
     })
     corner(miniLogo, 5)
     new("UIGradient", {
@@ -552,6 +565,7 @@ function Sift:CreateWindow(opts)
         Text = "S",
         TextColor3 = Sift.Theme.TextOnAccent,
         TextSize = 14,
+        ZIndex = 3,
     })
 
     local titleLbl = new("TextLabel", {
@@ -564,6 +578,7 @@ function Sift:CreateWindow(opts)
         TextColor3 = Sift.Theme.TextPrimary,
         TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 2,
     })
 
     if subtitle ~= "" then
@@ -577,46 +592,85 @@ function Sift:CreateWindow(opts)
             TextColor3 = Sift.Theme.TextMuted,
             TextSize = 12,
             TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 2,
         })
     end
 
-    -- close & minimise
-    local function makeIconBtn(text, xOffset, hoverColor)
-        local btn = new("TextButton", {
-            Parent = titleBar,
-            Size = UDim2.new(0, 28, 0, 28),
-            Position = UDim2.new(1, xOffset, 0.5, 0),
-            AnchorPoint = Vector2.new(1, 0.5),
-            BackgroundColor3 = Sift.Theme.SurfaceLight,
+    -- ========= MIN BUTTON =========
+    local minBtn = new("TextButton", {
+        Parent = titleBar,
+        Size = UDim2.new(0, 26, 0, 26),
+        Position = UDim2.new(1, -42, 0.5, 0),
+        AnchorPoint = Vector2.new(1, 0.5),
+        BackgroundColor3 = Sift.Theme.SurfaceLight,
+        BorderSizePixel = 0,
+        Font = Sift.Theme.FontBold,
+        Text = "—",
+        TextColor3 = Sift.Theme.TextSecondary,
+        TextSize = 14,
+        AutoButtonColor = false,
+        ZIndex = 2,
+    })
+    corner(minBtn, 6)
+    minBtn.MouseEnter:Connect(function()
+        tween(minBtn, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.Accent, TextColor3 = Sift.Theme.TextOnAccent})
+    end)
+    minBtn.MouseLeave:Connect(function()
+        tween(minBtn, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.SurfaceLight, TextColor3 = Sift.Theme.TextSecondary})
+    end)
+
+    -- ========= CLOSE BUTTON (real X built from two rotated bars) =========
+    local closeBtn = new("TextButton", {
+        Parent = titleBar,
+        Size = UDim2.new(0, 26, 0, 26),
+        Position = UDim2.new(1, -10, 0.5, 0),
+        AnchorPoint = Vector2.new(1, 0.5),
+        BackgroundColor3 = Sift.Theme.SurfaceLight,
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = false,
+        ZIndex = 2,
+    })
+    corner(closeBtn, 6)
+
+    local function makeXBar(rotation)
+        local bar = new("Frame", {
+            Parent = closeBtn,
+            Size = UDim2.new(0, 12, 0, 1.5),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = Sift.Theme.TextSecondary,
             BorderSizePixel = 0,
-            Font = Sift.Theme.FontBold,
-            Text = text,
-            TextColor3 = Sift.Theme.TextSecondary,
-            TextSize = 14,
-            AutoButtonColor = false,
+            Rotation = rotation,
+            ZIndex = 3,
         })
-        corner(btn, 6)
-        btn.MouseEnter:Connect(function()
-            tween(btn, TweenInfo.new(0.15), {BackgroundColor3 = hoverColor})
-        end)
-        btn.MouseLeave:Connect(function()
-            tween(btn, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.SurfaceLight})
-        end)
-        return btn
+        corner(bar, 1)
+        return bar
     end
+    local xBar1 = makeXBar(45)
+    local xBar2 = makeXBar(-45)
 
-    local closeBtn = makeIconBtn("✕", -8, Sift.Theme.Error)
-    local minBtn   = makeIconBtn("–", -42, Sift.Theme.Accent)
+    closeBtn.MouseEnter:Connect(function()
+        tween(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.Error})
+        tween(xBar1, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.TextOnAccent})
+        tween(xBar2, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.TextOnAccent})
+    end)
+    closeBtn.MouseLeave:Connect(function()
+        tween(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.SurfaceLight})
+        tween(xBar1, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.TextSecondary})
+        tween(xBar2, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.TextSecondary})
+    end)
 
-    -- Body
+    -- ========= BODY =========
     local body = new("Frame", {
         Parent = main,
-        Size = UDim2.new(1, 0, 1, -38),
-        Position = UDim2.new(0, 0, 0, 38),
+        Size = UDim2.new(1, -2, 1, -39),
+        Position = UDim2.new(0, 1, 0, 38),
         BackgroundTransparency = 1,
+        ClipsDescendants = false,
     })
 
-    -- Sidebar (tab list)
+    -- Sidebar
     local sidebar = new("Frame", {
         Parent = body,
         Size = UDim2.new(0, 140, 1, 0),
@@ -624,13 +678,73 @@ function Sift:CreateWindow(opts)
         BorderSizePixel = 0,
     })
 
-    local sidebarLayout = new("UIListLayout", {
+    -- Tab list
+    local tabList = new("Frame", {
         Parent = sidebar,
+        Size = UDim2.new(1, 0, 1, -64),
+        BackgroundTransparency = 1,
+    })
+    new("UIListLayout", {
+        Parent = tabList,
         FillDirection = Enum.FillDirection.Vertical,
         Padding = UDim.new(0, 4),
         SortOrder = Enum.SortOrder.LayoutOrder,
     })
-    padding(sidebar, 8)
+    padding(tabList, 8)
+
+    -- Profile area
+    local profileFrame = new("Frame", {
+        Parent = sidebar,
+        Size = UDim2.new(1, 0, 0, 56),
+        Position = UDim2.new(0, 0, 1, -56),
+        BackgroundColor3 = Sift.Theme.Background,
+        BorderSizePixel = 0,
+    })
+    new("Frame", {
+        Parent = profileFrame,
+        Size = UDim2.new(1, -16, 0, 1),
+        Position = UDim2.new(0, 8, 0, 0),
+        BackgroundColor3 = Sift.Theme.Border,
+        BorderSizePixel = 0,
+        BackgroundTransparency = 0.4,
+    })
+
+    local avatar = new("ImageLabel", {
+        Parent = profileFrame,
+        Size = UDim2.new(0, 36, 0, 36),
+        Position = UDim2.new(0, 10, 0.5, 0),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = Sift.Theme.SurfaceLight,
+        BorderSizePixel = 0,
+        Image = getPlayerThumb(LocalPlayer.UserId),
+    })
+    corner(avatar, 18)
+    stroke(avatar, Sift.Theme.Accent, 1, 0.3)
+
+    new("TextLabel", {
+        Parent = profileFrame,
+        Size = UDim2.new(1, -56, 0, 14),
+        Position = UDim2.new(0, 52, 0.5, -10),
+        BackgroundTransparency = 1,
+        Font = Sift.Theme.FontBold,
+        Text = LocalPlayer.DisplayName or LocalPlayer.Name,
+        TextColor3 = Sift.Theme.TextPrimary,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    })
+    new("TextLabel", {
+        Parent = profileFrame,
+        Size = UDim2.new(1, -56, 0, 12),
+        Position = UDim2.new(0, 52, 0.5, 4),
+        BackgroundTransparency = 1,
+        Font = Sift.Theme.Font,
+        Text = "@" .. LocalPlayer.Name,
+        TextColor3 = Sift.Theme.TextMuted,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    })
 
     -- Content host
     local content = new("Frame", {
@@ -639,13 +753,56 @@ function Sift:CreateWindow(opts)
         Position = UDim2.new(0, 140, 0, 0),
         BackgroundColor3 = Sift.Theme.Background,
         BorderSizePixel = 0,
+        ClipsDescendants = false,
+    })
+
+    -- =========== MINIMIZED PILL ===========
+    local minimizedGui = new("ScreenGui", {
+        Name = "Sift_Minimized",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 99,
+    })
+    safeParent(minimizedGui)
+
+    local pill = new("TextButton", {
+        Parent = minimizedGui,
+        Size = UDim2.new(0, 36, 0, 36),
+        Position = UDim2.new(0.5, 0, 0, 12),
+        AnchorPoint = Vector2.new(0.5, 0),
+        BackgroundColor3 = Sift.Theme.Accent,
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = false,
+        Visible = false,
+    })
+    corner(pill, 8)
+    new("UIGradient", {
+        Parent = pill,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Sift.Theme.AccentGlow),
+            ColorSequenceKeypoint.new(1, Sift.Theme.AccentDim),
+        }),
+        Rotation = 135,
+    })
+    stroke(pill, Sift.Theme.AccentGlow, 1, 0.3)
+    new("TextLabel", {
+        Parent = pill,
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Font = Sift.Theme.FontBold,
+        Text = "S",
+        TextColor3 = Sift.Theme.TextOnAccent,
+        TextSize = 20,
     })
 
     makeDraggable(main, titleBar)
 
-    -- Window object
+    -- ========= WINDOW OBJECT =========
     local Window = {
         _gui = gui,
+        _minimizedGui = minimizedGui,
+        _glowOuter = glowOuter,
         _main = main,
         _sidebar = sidebar,
         _content = content,
@@ -658,24 +815,22 @@ function Sift:CreateWindow(opts)
     function Window:Toggle()
         self._visible = not self._visible
         self._main.Visible = self._visible
+        self._glowOuter.Visible = self._visible
+        pill.Visible = not self._visible
     end
 
     function Window:Destroy()
         self._gui:Destroy()
+        self._minimizedGui:Destroy()
     end
 
-    closeBtn.MouseButton1Click:Connect(function()
-        Window:Destroy()
-    end)
-    minBtn.MouseButton1Click:Connect(function()
-        Window:Toggle()
-    end)
+    closeBtn.MouseButton1Click:Connect(function() Window:Destroy() end)
+    minBtn.MouseButton1Click:Connect(function() Window:Toggle() end)
+    pill.MouseButton1Click:Connect(function() Window:Toggle() end)
 
     UserInputService.InputBegan:Connect(function(input, processed)
         if processed then return end
-        if input.KeyCode == toggleKey then
-            Window:Toggle()
-        end
+        if input.KeyCode == toggleKey then Window:Toggle() end
     end)
 
     -- =====================================================================
@@ -684,10 +839,9 @@ function Sift:CreateWindow(opts)
     function Window:CreateTab(tabOpts)
         tabOpts = tabOpts or {}
         local tabName = tabOpts.Name or tabOpts.Title or "Tab"
-        local tabIcon = tabOpts.Icon  -- optional rbxassetid:// or text
 
         local btn = new("TextButton", {
-            Parent = self._sidebar,
+            Parent = tabList,
             Size = UDim2.new(1, 0, 0, 32),
             BackgroundColor3 = Sift.Theme.SurfaceLight,
             BackgroundTransparency = 1,
@@ -702,7 +856,6 @@ function Sift:CreateWindow(opts)
         corner(btn, 6)
         padding(btn, 8)
 
-        -- accent indicator on active
         local indicator = new("Frame", {
             Parent = btn,
             Size = UDim2.new(0, 3, 0, 16),
@@ -724,6 +877,7 @@ function Sift:CreateWindow(opts)
             CanvasSize = UDim2.new(0, 0, 0, 0),
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
             Visible = false,
+            ClipsDescendants = false,
         })
         padding(page, 12)
         new("UIListLayout", {
@@ -733,12 +887,7 @@ function Sift:CreateWindow(opts)
             SortOrder = Enum.SortOrder.LayoutOrder,
         })
 
-        local Tab = {
-            _btn = btn,
-            _page = page,
-            _indicator = indicator,
-            _name = tabName,
-        }
+        local Tab = { _btn = btn, _page = page, _indicator = indicator, _name = tabName }
 
         local function setActive(active)
             if active then
@@ -753,7 +902,6 @@ function Sift:CreateWindow(opts)
                 page.Visible = false
             end
         end
-
         Tab._setActive = setActive
 
         btn.MouseEnter:Connect(function()
@@ -766,30 +914,25 @@ function Sift:CreateWindow(opts)
                 tween(btn, TweenInfo.new(0.15), {BackgroundTransparency = 1})
             end
         end)
-
         btn.MouseButton1Click:Connect(function()
-            if Window._activeTab then
-                Window._activeTab._setActive(false)
-            end
+            if Window._activeTab then Window._activeTab._setActive(false) end
             Window._activeTab = Tab
             setActive(true)
         end)
-
-        -- first tab auto-active
         if not Window._activeTab then
             Window._activeTab = Tab
             setActive(true)
         end
-
         table.insert(self._tabs, Tab)
 
-        -- ============== ELEMENT BUILDERS ==============
+        -- ===================== ELEMENTS =====================
         local function elementContainer(height)
             local f = new("Frame", {
                 Parent = page,
                 Size = UDim2.new(1, 0, 0, height or 36),
-                BackgroundColor3 = Sift.Theme.Surface,
+                BackgroundColor3 = Sift.Theme.SurfaceLight,
                 BorderSizePixel = 0,
+                ClipsDescendants = false,
             })
             corner(f, 6)
             stroke(f, Sift.Theme.Border, 1, 0.5)
@@ -797,7 +940,7 @@ function Sift:CreateWindow(opts)
         end
 
         function Tab:AddSection(name)
-            local lbl = new("TextLabel", {
+            return new("TextLabel", {
                 Parent = page,
                 Size = UDim2.new(1, 0, 0, 24),
                 BackgroundTransparency = 1,
@@ -807,7 +950,6 @@ function Sift:CreateWindow(opts)
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
             })
-            return lbl
         end
 
         function Tab:AddLabel(text)
@@ -832,19 +974,14 @@ function Sift:CreateWindow(opts)
             local f = new("Frame", {
                 Parent = page,
                 Size = UDim2.new(1, 0, 0, 50),
-                BackgroundColor3 = Sift.Theme.Surface,
+                BackgroundColor3 = Sift.Theme.SurfaceLight,
                 BorderSizePixel = 0,
                 AutomaticSize = Enum.AutomaticSize.Y,
             })
             corner(f, 6)
             stroke(f, Sift.Theme.Border, 1, 0.5)
             padding(f, 10)
-
-            local layout = new("UIListLayout", {
-                Parent = f,
-                Padding = UDim.new(0, 4),
-            })
-
+            new("UIListLayout", { Parent = f, Padding = UDim.new(0, 4) })
             new("TextLabel", {
                 Parent = f,
                 Size = UDim2.new(1, 0, 0, 18),
@@ -868,14 +1005,12 @@ function Sift:CreateWindow(opts)
                 TextYAlignment = Enum.TextYAlignment.Top,
                 TextWrapped = true,
             })
-
             return f
         end
 
         function Tab:AddButton(opts)
             opts = opts or {}
             local f = elementContainer(36)
-
             local btn = new("TextButton", {
                 Parent = f,
                 Size = UDim2.new(1, 0, 1, 0),
@@ -886,22 +1021,18 @@ function Sift:CreateWindow(opts)
                 TextSize = 13,
                 AutoButtonColor = false,
             })
-
             btn.MouseEnter:Connect(function()
-                tween(f, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.SurfaceHover})
+                tween(f, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.AccentDim})
             end)
             btn.MouseLeave:Connect(function()
-                tween(f, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.Surface})
+                tween(f, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.SurfaceLight})
             end)
             btn.MouseButton1Click:Connect(function()
-                tween(f, TweenInfo.new(0.08), {BackgroundColor3 = Sift.Theme.AccentDim})
+                tween(f, TweenInfo.new(0.08), {BackgroundColor3 = Sift.Theme.Accent})
                 task.wait(0.08)
-                tween(f, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.SurfaceHover})
-                if opts.Callback then
-                    pcall(opts.Callback)
-                end
+                tween(f, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.AccentDim})
+                if opts.Callback then pcall(opts.Callback) end
             end)
-
             return btn
         end
 
@@ -911,8 +1042,7 @@ function Sift:CreateWindow(opts)
             local flag    = opts.Flag
 
             local f = elementContainer(36)
-
-            local lbl = new("TextLabel", {
+            new("TextLabel", {
                 Parent = f,
                 Size = UDim2.new(1, -56, 1, 0),
                 Position = UDim2.new(0, 12, 0, 0),
@@ -929,10 +1059,11 @@ function Sift:CreateWindow(opts)
                 Size = UDim2.new(0, 36, 0, 18),
                 Position = UDim2.new(1, -12, 0.5, 0),
                 AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundColor3 = Sift.Theme.SurfaceLight,
+                BackgroundColor3 = Sift.Theme.Background,
                 BorderSizePixel = 0,
             })
             corner(switch, 9)
+            stroke(switch, Sift.Theme.Border, 1, 0.4)
 
             local knob = new("Frame", {
                 Parent = switch,
@@ -954,35 +1085,26 @@ function Sift:CreateWindow(opts)
 
             local state = default
             local api = {}
-
             local function render()
                 if state then
                     tween(switch, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.Accent})
                     tween(knob,   TweenInfo.new(0.15), {Position = UDim2.new(1, -16, 0.5, 0), BackgroundColor3 = Sift.Theme.TextOnAccent})
                 else
-                    tween(switch, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.SurfaceLight})
+                    tween(switch, TweenInfo.new(0.15), {BackgroundColor3 = Sift.Theme.Background})
                     tween(knob,   TweenInfo.new(0.15), {Position = UDim2.new(0, 2, 0.5, 0), BackgroundColor3 = Sift.Theme.TextSecondary})
                 end
             end
-
             function api:Set(v)
                 state = v and true or false
                 if flag then Sift.Flags[flag] = state end
                 render()
                 if opts.Callback then pcall(opts.Callback, state) end
             end
-
             function api:Get() return state end
-
-            clickArea.MouseButton1Click:Connect(function()
-                api:Set(not state)
-            end)
-
-            -- init
+            clickArea.MouseButton1Click:Connect(function() api:Set(not state) end)
             knob.AnchorPoint = Vector2.new(0, 0.5)
             if flag then Sift.Flags[flag] = state end
             render()
-
             return api
         end
 
@@ -991,12 +1113,11 @@ function Sift:CreateWindow(opts)
             local min     = opts.Min or 0
             local max     = opts.Max or 100
             local default = math.clamp(opts.Default or min, min, max)
-            local round   = opts.Round or 0  -- decimal places
+            local round   = opts.Round or 0
             local flag    = opts.Flag
 
             local f = elementContainer(54)
-
-            local lbl = new("TextLabel", {
+            new("TextLabel", {
                 Parent = f,
                 Size = UDim2.new(1, -60, 0, 18),
                 Position = UDim2.new(0, 12, 0, 6),
@@ -1025,10 +1146,11 @@ function Sift:CreateWindow(opts)
                 Parent = f,
                 Size = UDim2.new(1, -24, 0, 6),
                 Position = UDim2.new(0, 12, 0, 32),
-                BackgroundColor3 = Sift.Theme.SurfaceLight,
+                BackgroundColor3 = Sift.Theme.Background,
                 BorderSizePixel = 0,
             })
             corner(barBg, 3)
+            stroke(barBg, Sift.Theme.Border, 1, 0.5)
 
             local fill = new("Frame", {
                 Parent = barBg,
@@ -1049,15 +1171,12 @@ function Sift:CreateWindow(opts)
             corner(knob, 6)
 
             local function format(v)
-                if round == 0 then
-                    return tostring(math.floor(v))
-                end
+                if round == 0 then return tostring(math.floor(v)) end
                 return string.format("%." .. round .. "f", v)
             end
 
             local value = default
             local api = {}
-
             local function setFromAlpha(alpha)
                 alpha = math.clamp(alpha, 0, 1)
                 value = min + (max - min) * alpha
@@ -1073,12 +1192,10 @@ function Sift:CreateWindow(opts)
                 if flag then Sift.Flags[flag] = value end
                 if opts.Callback then pcall(opts.Callback, value) end
             end
-
             function api:Set(v)
                 local alpha = (math.clamp(v, min, max) - min) / (max - min)
                 setFromAlpha(alpha)
             end
-
             function api:Get() return value end
 
             local dragging = false
@@ -1086,7 +1203,6 @@ function Sift:CreateWindow(opts)
                 local pos = input.Position.X - barBg.AbsolutePosition.X
                 setFromAlpha(pos / barBg.AbsoluteSize.X)
             end
-
             barBg.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1107,11 +1223,11 @@ function Sift:CreateWindow(opts)
                     dragging = false
                 end
             end)
-
             if flag then Sift.Flags[flag] = value end
             return api
         end
 
+        -- ============== DROPDOWN (popup hosted at top of window gui) ==============
         function Tab:AddDropdown(opts)
             opts = opts or {}
             local items   = opts.Options or opts.Items or {}
@@ -1120,8 +1236,7 @@ function Sift:CreateWindow(opts)
             local flag    = opts.Flag
 
             local f = elementContainer(36)
-
-            local lbl = new("TextLabel", {
+            new("TextLabel", {
                 Parent = f,
                 Size = UDim2.new(0.5, -12, 1, 0),
                 Position = UDim2.new(0, 12, 0, 0),
@@ -1138,16 +1253,17 @@ function Sift:CreateWindow(opts)
                 Size = UDim2.new(0.5, -12, 0, 24),
                 Position = UDim2.new(1, -12, 0.5, 0),
                 AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundColor3 = Sift.Theme.SurfaceLight,
+                BackgroundColor3 = Sift.Theme.Background,
                 BorderSizePixel = 0,
                 Font = Sift.Theme.Font,
-                Text = "Select...",
+                Text = "  Select...",
                 TextColor3 = Sift.Theme.TextSecondary,
                 TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
                 AutoButtonColor = false,
             })
             corner(valueBtn, 4)
-            stroke(valueBtn, Sift.Theme.Border, 1, 0.4)
+            stroke(valueBtn, Sift.Theme.Accent, 1, 0.5)
 
             local arrow = new("TextLabel", {
                 Parent = valueBtn,
@@ -1161,29 +1277,25 @@ function Sift:CreateWindow(opts)
                 TextSize = 9,
             })
 
-            local list = new("Frame", {
-                Parent = f,
-                Size = UDim2.new(0.5, -12, 0, 0),
-                Position = UDim2.new(1, -12, 1, 4),
-                AnchorPoint = Vector2.new(1, 0),
+            -- popup at top of window gui so it overlaps everything else
+            local popup = new("Frame", {
+                Parent = gui,
+                Size = UDim2.new(0, 100, 0, 0),
                 BackgroundColor3 = Sift.Theme.Surface,
                 BorderSizePixel = 0,
                 Visible = false,
-                ZIndex = 5,
+                ZIndex = 50,
                 ClipsDescendants = true,
             })
-            corner(list, 6)
-            stroke(list, Sift.Theme.Border, 1, 0)
-
-            local listLayout = new("UIListLayout", {
-                Parent = list,
-                Padding = UDim.new(0, 2),
-            })
-            padding(list, 4)
+            corner(popup, 6)
+            stroke(popup, Sift.Theme.Accent, 1, 0.3)
+            new("UIListLayout", { Parent = popup, Padding = UDim.new(0, 2) })
+            padding(popup, 4)
 
             local selected = multi and {} or nil
-            local api = {}
             local optionBtns = {}
+            local api = {}
+            local open = false
 
             local function refreshDisplay()
                 if multi then
@@ -1198,12 +1310,12 @@ function Sift:CreateWindow(opts)
                 end
             end
 
-            local function rebuild()
+            local function rebuildOptions()
                 for _, b in ipairs(optionBtns) do b:Destroy() end
                 optionBtns = {}
                 for _, item in ipairs(items) do
                     local optBtn = new("TextButton", {
-                        Parent = list,
+                        Parent = popup,
                         Size = UDim2.new(1, 0, 0, 24),
                         BackgroundColor3 = Sift.Theme.SurfaceLight,
                         BackgroundTransparency = 1,
@@ -1213,15 +1325,15 @@ function Sift:CreateWindow(opts)
                         TextColor3 = Sift.Theme.TextSecondary,
                         TextSize = 12,
                         TextXAlignment = Enum.TextXAlignment.Left,
-                        ZIndex = 6,
+                        ZIndex = 51,
                         AutoButtonColor = false,
                     })
                     corner(optBtn, 4)
                     optBtn.MouseEnter:Connect(function()
-                        tween(optBtn, TweenInfo.new(0.1), {BackgroundTransparency = 0, BackgroundColor3 = Sift.Theme.SurfaceHover})
+                        tween(optBtn, TweenInfo.new(0.1), {BackgroundTransparency = 0, BackgroundColor3 = Sift.Theme.AccentDim, TextColor3 = Sift.Theme.TextPrimary})
                     end)
                     optBtn.MouseLeave:Connect(function()
-                        tween(optBtn, TweenInfo.new(0.1), {BackgroundTransparency = 1})
+                        tween(optBtn, TweenInfo.new(0.1), {BackgroundTransparency = 1, TextColor3 = Sift.Theme.TextSecondary})
                     end)
                     optBtn.MouseButton1Click:Connect(function()
                         if multi then
@@ -1240,18 +1352,26 @@ function Sift:CreateWindow(opts)
                     end)
                     table.insert(optionBtns, optBtn)
                 end
-                list.Size = UDim2.new(0.5, -12, 0, math.min(#items * 26 + 8, 130))
             end
 
-            local open = false
+            local function reposition()
+                local btnPos = valueBtn.AbsolutePosition
+                local btnSize = valueBtn.AbsoluteSize
+                local popupHeight = math.min(#items * 26 + 8, 130)
+                popup.Size = UDim2.new(0, btnSize.X, 0, popupHeight)
+                popup.Position = UDim2.new(0, btnPos.X, 0, btnPos.Y + btnSize.Y + 4)
+            end
+
             function api:Open()
                 open = true
-                list.Visible = true
+                rebuildOptions()
+                reposition()
+                popup.Visible = true
                 arrow.Text = "▲"
             end
             function api:Close()
                 open = false
-                list.Visible = false
+                popup.Visible = false
                 arrow.Text = "▼"
             end
             function api:Set(v)
@@ -1268,25 +1388,42 @@ function Sift:CreateWindow(opts)
             function api:Get() return selected end
             function api:Refresh(newItems)
                 items = newItems or items
-                rebuild()
+                if open then rebuildOptions() reposition() end
             end
 
             valueBtn.MouseButton1Click:Connect(function()
                 if open then api:Close() else api:Open() end
             end)
 
-            rebuild()
+            UserInputService.InputBegan:Connect(function(input)
+                if open
+                and (input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch) then
+                    local mp = UserInputService:GetMouseLocation()
+                    local p1, s1 = popup.AbsolutePosition, popup.AbsoluteSize
+                    local p2, s2 = valueBtn.AbsolutePosition, valueBtn.AbsoluteSize
+                    local inPopup = mp.X >= p1.X and mp.X <= p1.X + s1.X
+                                and mp.Y >= p1.Y and mp.Y <= p1.Y + s1.Y
+                    local inBtn   = mp.X >= p2.X and mp.X <= p2.X + s2.X
+                                and mp.Y >= p2.Y and mp.Y <= p2.Y + s2.Y
+                    if not inPopup and not inBtn then api:Close() end
+                end
+            end)
+
+            main:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+                if open then reposition() end
+            end)
+
+            rebuildOptions()
             if default then api:Set(default) else refreshDisplay() end
             if flag then Sift.Flags[flag] = selected end
-
             return api
         end
 
         function Tab:AddInput(opts)
             opts = opts or {}
             local f = elementContainer(36)
-
-            local lbl = new("TextLabel", {
+            new("TextLabel", {
                 Parent = f,
                 Size = UDim2.new(0.4, -12, 1, 0),
                 Position = UDim2.new(0, 12, 0, 0),
@@ -1297,13 +1434,12 @@ function Sift:CreateWindow(opts)
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
             })
-
             local box = new("TextBox", {
                 Parent = f,
                 Size = UDim2.new(0.6, -12, 0, 24),
                 Position = UDim2.new(1, -12, 0.5, 0),
                 AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundColor3 = Sift.Theme.SurfaceLight,
+                BackgroundColor3 = Sift.Theme.Background,
                 BorderSizePixel = 0,
                 Font = Sift.Theme.Font,
                 PlaceholderText = opts.Placeholder or "",
@@ -1314,22 +1450,14 @@ function Sift:CreateWindow(opts)
                 ClearTextOnFocus = false,
             })
             corner(box, 4)
-            stroke(box, Sift.Theme.Border, 1, 0.4)
+            local boxStroke = stroke(box, Sift.Theme.Border, 1, 0.4)
             padding(box, 6)
 
             box.Focused:Connect(function()
-                for _, s in ipairs(box:GetChildren()) do
-                    if s:IsA("UIStroke") then
-                        tween(s, TweenInfo.new(0.15), {Color = Sift.Theme.Accent, Transparency = 0})
-                    end
-                end
+                tween(boxStroke, TweenInfo.new(0.15), {Color = Sift.Theme.Accent, Transparency = 0})
             end)
             box.FocusLost:Connect(function(enter)
-                for _, s in ipairs(box:GetChildren()) do
-                    if s:IsA("UIStroke") then
-                        tween(s, TweenInfo.new(0.15), {Color = Sift.Theme.Border, Transparency = 0.4})
-                    end
-                end
+                tween(boxStroke, TweenInfo.new(0.15), {Color = Sift.Theme.Border, Transparency = 0.4})
                 if opts.Callback then pcall(opts.Callback, box.Text, enter) end
                 if opts.Flag then Sift.Flags[opts.Flag] = box.Text end
             end)
@@ -1347,7 +1475,6 @@ function Sift:CreateWindow(opts)
             local flag    = opts.Flag
 
             local f = elementContainer(36)
-
             new("TextLabel", {
                 Parent = f,
                 Size = UDim2.new(1, -100, 1, 0),
@@ -1359,13 +1486,12 @@ function Sift:CreateWindow(opts)
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
             })
-
             local btn = new("TextButton", {
                 Parent = f,
                 Size = UDim2.new(0, 80, 0, 24),
                 Position = UDim2.new(1, -12, 0.5, 0),
                 AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundColor3 = Sift.Theme.SurfaceLight,
+                BackgroundColor3 = Sift.Theme.Background,
                 BorderSizePixel = 0,
                 Font = Sift.Theme.FontMedium,
                 Text = default.Name or "None",
@@ -1374,26 +1500,22 @@ function Sift:CreateWindow(opts)
                 AutoButtonColor = false,
             })
             corner(btn, 4)
-            stroke(btn, Sift.Theme.Border, 1, 0.4)
+            stroke(btn, Sift.Theme.Accent, 1, 0.5)
 
             local current = default
             local listening = false
             local api = {}
-
             local function setKey(k)
                 current = k
                 btn.Text = k.Name
                 if flag then Sift.Flags[flag] = current end
             end
-
             function api:Set(k) setKey(k) end
             function api:Get() return current end
-
             btn.MouseButton1Click:Connect(function()
                 listening = true
                 btn.Text = "..."
             end)
-
             UserInputService.InputBegan:Connect(function(input, processed)
                 if listening and input.UserInputType == Enum.UserInputType.Keyboard then
                     setKey(input.KeyCode)
@@ -1404,7 +1526,6 @@ function Sift:CreateWindow(opts)
                     if opts.Callback then pcall(opts.Callback, current) end
                 end
             end)
-
             if flag then Sift.Flags[flag] = current end
             return api
         end
@@ -1415,7 +1536,6 @@ function Sift:CreateWindow(opts)
             local flag    = opts.Flag
 
             local f = elementContainer(36)
-
             new("TextLabel", {
                 Parent = f,
                 Size = UDim2.new(1, -56, 1, 0),
@@ -1427,7 +1547,6 @@ function Sift:CreateWindow(opts)
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
             })
-
             local swatch = new("TextButton", {
                 Parent = f,
                 Size = UDim2.new(0, 28, 0, 20),
@@ -1439,113 +1558,124 @@ function Sift:CreateWindow(opts)
                 AutoButtonColor = false,
             })
             corner(swatch, 4)
-            stroke(swatch, Sift.Theme.Border, 1, 0.3)
+            stroke(swatch, Sift.Theme.Accent, 1, 0.3)
 
             local color = default
             local api = {}
 
-            -- minimal popup picker (R,G,B sliders)
-            local popup
-            local function buildPopup()
-                if popup then popup:Destroy() end
-                popup = new("Frame", {
-                    Parent = f,
-                    Size = UDim2.new(0, 200, 0, 110),
-                    Position = UDim2.new(1, -12, 1, 4),
-                    AnchorPoint = Vector2.new(1, 0),
-                    BackgroundColor3 = Sift.Theme.Surface,
-                    BorderSizePixel = 0,
-                    Visible = false,
-                    ZIndex = 10,
-                })
-                corner(popup, 6)
-                stroke(popup, Sift.Theme.Border, 1, 0)
-                padding(popup, 8)
+            local popup = new("Frame", {
+                Parent = gui,
+                Size = UDim2.new(0, 180, 0, 96),
+                BackgroundColor3 = Sift.Theme.Surface,
+                BorderSizePixel = 0,
+                Visible = false,
+                ZIndex = 50,
+            })
+            corner(popup, 6)
+            stroke(popup, Sift.Theme.Accent, 1, 0.3)
+            padding(popup, 8)
+            new("UIListLayout", { Parent = popup, Padding = UDim.new(0, 6) })
 
-                local layout = new("UIListLayout", {
+            local function makeChan(label, init)
+                local row = new("Frame", {
                     Parent = popup,
-                    Padding = UDim.new(0, 6),
+                    Size = UDim2.new(1, 0, 0, 18),
+                    BackgroundTransparency = 1,
+                    ZIndex = 51,
                 })
+                new("TextLabel", {
+                    Parent = row,
+                    Size = UDim2.new(0, 14, 1, 0),
+                    BackgroundTransparency = 1,
+                    Font = Sift.Theme.FontBold,
+                    Text = label,
+                    TextColor3 = Sift.Theme.Accent,
+                    TextSize = 11,
+                    ZIndex = 52,
+                })
+                local box = new("TextBox", {
+                    Parent = row,
+                    Size = UDim2.new(1, -22, 1, 0),
+                    Position = UDim2.new(0, 18, 0, 0),
+                    BackgroundColor3 = Sift.Theme.Background,
+                    BorderSizePixel = 0,
+                    Font = Sift.Theme.Font,
+                    Text = tostring(init),
+                    TextColor3 = Sift.Theme.TextPrimary,
+                    TextSize = 11,
+                    ZIndex = 52,
+                })
+                corner(box, 3)
+                stroke(box, Sift.Theme.Border, 1, 0.4)
+                return box
+            end
+            local r = makeChan("R", math.floor(default.R * 255))
+            local g = makeChan("G", math.floor(default.G * 255))
+            local b = makeChan("B", math.floor(default.B * 255))
 
-                local function makeChan(label, init)
-                    local row = new("Frame", {
-                        Parent = popup,
-                        Size = UDim2.new(1, 0, 0, 18),
-                        BackgroundTransparency = 1,
-                        ZIndex = 10,
-                    })
-                    new("TextLabel", {
-                        Parent = row,
-                        Size = UDim2.new(0, 14, 1, 0),
-                        BackgroundTransparency = 1,
-                        Font = Sift.Theme.FontBold,
-                        Text = label,
-                        TextColor3 = Sift.Theme.Accent,
-                        TextSize = 11,
-                        ZIndex = 10,
-                    })
-                    local box = new("TextBox", {
-                        Parent = row,
-                        Size = UDim2.new(1, -22, 1, 0),
-                        Position = UDim2.new(0, 18, 0, 0),
-                        BackgroundColor3 = Sift.Theme.SurfaceLight,
-                        BorderSizePixel = 0,
-                        Font = Sift.Theme.Font,
-                        Text = tostring(init),
-                        TextColor3 = Sift.Theme.TextPrimary,
-                        TextSize = 11,
-                        ZIndex = 10,
-                    })
-                    corner(box, 3)
-                    return box
-                end
+            local function commit()
+                local rv = math.clamp(tonumber(r.Text) or 0, 0, 255)
+                local gv = math.clamp(tonumber(g.Text) or 0, 0, 255)
+                local bv = math.clamp(tonumber(b.Text) or 0, 0, 255)
+                color = Color3.fromRGB(rv, gv, bv)
+                swatch.BackgroundColor3 = color
+                if flag then Sift.Flags[flag] = color end
+                if opts.Callback then pcall(opts.Callback, color) end
+            end
+            r.FocusLost:Connect(commit)
+            g.FocusLost:Connect(commit)
+            b.FocusLost:Connect(commit)
 
-                local r = makeChan("R", math.floor(color.R * 255))
-                local g = makeChan("G", math.floor(color.G * 255))
-                local b = makeChan("B", math.floor(color.B * 255))
-
-                local function commit()
-                    local rv = math.clamp(tonumber(r.Text) or 0, 0, 255)
-                    local gv = math.clamp(tonumber(g.Text) or 0, 0, 255)
-                    local bv = math.clamp(tonumber(b.Text) or 0, 0, 255)
-                    color = Color3.fromRGB(rv, gv, bv)
-                    swatch.BackgroundColor3 = color
-                    if flag then Sift.Flags[flag] = color end
-                    if opts.Callback then pcall(opts.Callback, color) end
-                end
-
-                r.FocusLost:Connect(commit)
-                g.FocusLost:Connect(commit)
-                b.FocusLost:Connect(commit)
+            local function reposition()
+                local p, s = swatch.AbsolutePosition, swatch.AbsoluteSize
+                popup.Position = UDim2.new(0, p.X + s.X - 180, 0, p.Y + s.Y + 4)
             end
 
-            buildPopup()
-
             swatch.MouseButton1Click:Connect(function()
-                popup.Visible = not popup.Visible
+                if popup.Visible then
+                    popup.Visible = false
+                else
+                    reposition()
+                    popup.Visible = true
+                end
+            end)
+
+            UserInputService.InputBegan:Connect(function(input)
+                if popup.Visible
+                and (input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch) then
+                    local mp = UserInputService:GetMouseLocation()
+                    local p1, s1 = popup.AbsolutePosition, popup.AbsoluteSize
+                    local p2, s2 = swatch.AbsolutePosition, swatch.AbsoluteSize
+                    local inPopup = mp.X >= p1.X and mp.X <= p1.X + s1.X
+                                and mp.Y >= p1.Y and mp.Y <= p1.Y + s1.Y
+                    local inBtn   = mp.X >= p2.X and mp.X <= p2.X + s2.X
+                                and mp.Y >= p2.Y and mp.Y <= p2.Y + s2.Y
+                    if not inPopup and not inBtn then popup.Visible = false end
+                end
             end)
 
             function api:Set(c)
                 color = c
                 swatch.BackgroundColor3 = c
+                r.Text = tostring(math.floor(c.R * 255))
+                g.Text = tostring(math.floor(c.G * 255))
+                b.Text = tostring(math.floor(c.B * 255))
                 if flag then Sift.Flags[flag] = c end
-                buildPopup()
             end
             function api:Get() return color end
-
             if flag then Sift.Flags[flag] = color end
             return api
         end
 
         function Tab:AddDivider()
-            local div = new("Frame", {
+            return new("Frame", {
                 Parent = page,
                 Size = UDim2.new(1, 0, 0, 1),
                 BackgroundColor3 = Sift.Theme.Border,
                 BorderSizePixel = 0,
                 BackgroundTransparency = 0.4,
             })
-            return div
         end
 
         return Tab

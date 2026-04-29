@@ -60,11 +60,14 @@ Sift.Theme = {
     SurfaceHover    = Color3.fromRGB(16, 18, 26),
     Border          = Color3.fromRGB(20, 22, 34),
 
-    -- Midnight/purplish blue
-    Accent          = Color3.fromRGB(80, 90, 220),    -- primary midnight blue
-    AccentHover     = Color3.fromRGB(110, 120, 240),
-    AccentDim       = Color3.fromRGB(50, 55, 150),
-    AccentGlow      = Color3.fromRGB(140, 150, 255),  -- bright fluorescent edge
+    -- Deep indigo/violet (matches user-provided color sample)
+    Accent          = Color3.fromRGB(45, 25, 110),    -- primary deep indigo
+    AccentHover     = Color3.fromRGB(70, 45, 145),
+    AccentDim       = Color3.fromRGB(28, 15, 75),
+    AccentGlow      = Color3.fromRGB(100, 75, 190),   -- brighter edge for glow
+
+    -- Status colors mirror the accent family per request
+    -- (see Status assignments further down)
 
     -- Text — bolder/brighter white
     TextPrimary     = Color3.fromRGB(250, 252, 255),
@@ -73,9 +76,9 @@ Sift.Theme = {
     TextOnAccent    = Color3.fromRGB(255, 255, 255),
 
     -- Status — all use the accent blue family per request
-    Success         = Color3.fromRGB(80, 90, 220),
-    Warning         = Color3.fromRGB(110, 120, 240),
-    Error           = Color3.fromRGB(140, 150, 255),
+    Success         = Color3.fromRGB(45, 25, 110),
+    Warning         = Color3.fromRGB(70, 45, 145),
+    Error           = Color3.fromRGB(100, 75, 190),
 
     Font            = Enum.Font.Gotham,
     FontBold        = Enum.Font.GothamBold,
@@ -1066,12 +1069,26 @@ function Sift:CreateWindow(opts)
     end)
 
     -- ========= BODY =========
+    -- Round the body itself with the same inner radius as main so that
+    -- sidebar and content rectangles get clipped to the curve at all
+    -- four corners. Top corners sit under the title bar so they don't
+    -- visually matter; bottom corners are what we're fixing.
     local body = new("Frame", {
         Parent = main,
-        Size = UDim2.new(1, -2, 1, -S(39)),
+        Size = UDim2.new(1, -2, 1, -S(38)),
         Position = UDim2.new(0, 1, 0, S(38)),
-        BackgroundTransparency = 1,
-        ClipsDescendants = false,
+        BackgroundColor3 = Sift.Theme.Background,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    })
+    corner(body, 11)
+    -- Mask the top edge of body to be square so it tucks flat under titlebar
+    new("Frame", {
+        Parent = body,
+        Size = UDim2.new(1, 0, 0, S(12)),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Sift.Theme.Background,
+        BorderSizePixel = 0,
     })
 
     local sidebar = new("Frame", {
@@ -1079,26 +1096,6 @@ function Sift:CreateWindow(opts)
         Size = SUDim2(0, 140, 1, 0),
         BackgroundColor3 = Sift.Theme.Background,
         BorderSizePixel = 0,
-    })
-    -- Round sidebar so bottom-left tucks inside main's rounded stroke.
-    -- Mask the TOP edge with a square overlay so it sits flat under titlebar.
-    corner(sidebar, 11)
-    new("Frame", {
-        Parent = sidebar,
-        Size = UDim2.new(1, 0, 0, S(12)),
-        Position = UDim2.new(0, 0, 0, 0),
-        BackgroundColor3 = Sift.Theme.Background,
-        BorderSizePixel = 0,
-        ZIndex = 0,
-    })
-    -- Mask the right edge so it sits flat against content area
-    new("Frame", {
-        Parent = sidebar,
-        Size = UDim2.new(0, S(12), 1, 0),
-        Position = UDim2.new(1, -S(12), 0, 0),
-        BackgroundColor3 = Sift.Theme.Background,
-        BorderSizePixel = 0,
-        ZIndex = 0,
     })
 
     local tabList = new("Frame", {
@@ -1199,7 +1196,7 @@ function Sift:CreateWindow(opts)
         end
     end)
 
-    -- Content host
+    -- Content host (body clips us to rounded shape, so no corner needed here)
     local content = new("Frame", {
         Parent = body,
         Size = UDim2.new(1, -S(140), 1, 0),
@@ -1207,26 +1204,6 @@ function Sift:CreateWindow(opts)
         BackgroundColor3 = Sift.Theme.Background,
         BorderSizePixel = 0,
         ClipsDescendants = false,
-    })
-    -- Round content so bottom-right tucks inside main's rounded stroke.
-    corner(content, 11)
-    -- Mask top edge flat (under titlebar)
-    new("Frame", {
-        Parent = content,
-        Size = UDim2.new(1, 0, 0, S(12)),
-        Position = UDim2.new(0, 0, 0, 0),
-        BackgroundColor3 = Sift.Theme.Background,
-        BorderSizePixel = 0,
-        ZIndex = 0,
-    })
-    -- Mask left edge flat (against sidebar)
-    new("Frame", {
-        Parent = content,
-        Size = UDim2.new(0, S(12), 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
-        BackgroundColor3 = Sift.Theme.Background,
-        BorderSizePixel = 0,
-        ZIndex = 0,
     })
 
     -- =========== MINIMIZED PILL ===========
@@ -2013,7 +1990,7 @@ function Sift:CreateWindow(opts)
 
         function Tab:AddColorPicker(opts)
             opts = opts or {}
-            local default = opts.Default or Color3.fromRGB(80, 90, 220)
+            local default = opts.Default or Color3.fromRGB(45, 25, 110)
             local flag    = opts.Flag
 
             local f = elementContainer(36)

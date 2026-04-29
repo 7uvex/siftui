@@ -1080,6 +1080,26 @@ function Sift:CreateWindow(opts)
         BackgroundColor3 = Sift.Theme.Background,
         BorderSizePixel = 0,
     })
+    -- Round sidebar so bottom-left tucks inside main's rounded stroke.
+    -- Mask the TOP edge with a square overlay so it sits flat under titlebar.
+    corner(sidebar, 11)
+    new("Frame", {
+        Parent = sidebar,
+        Size = UDim2.new(1, 0, 0, S(12)),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Sift.Theme.Background,
+        BorderSizePixel = 0,
+        ZIndex = 0,
+    })
+    -- Mask the right edge so it sits flat against content area
+    new("Frame", {
+        Parent = sidebar,
+        Size = UDim2.new(0, S(12), 1, 0),
+        Position = UDim2.new(1, -S(12), 0, 0),
+        BackgroundColor3 = Sift.Theme.Background,
+        BorderSizePixel = 0,
+        ZIndex = 0,
+    })
 
     local tabList = new("Frame", {
         Parent = sidebar,
@@ -1187,6 +1207,26 @@ function Sift:CreateWindow(opts)
         BackgroundColor3 = Sift.Theme.Background,
         BorderSizePixel = 0,
         ClipsDescendants = false,
+    })
+    -- Round content so bottom-right tucks inside main's rounded stroke.
+    corner(content, 11)
+    -- Mask top edge flat (under titlebar)
+    new("Frame", {
+        Parent = content,
+        Size = UDim2.new(1, 0, 0, S(12)),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Sift.Theme.Background,
+        BorderSizePixel = 0,
+        ZIndex = 0,
+    })
+    -- Mask left edge flat (against sidebar)
+    new("Frame", {
+        Parent = content,
+        Size = UDim2.new(0, S(12), 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Sift.Theme.Background,
+        BorderSizePixel = 0,
+        ZIndex = 0,
     })
 
     -- =========== MINIMIZED PILL ===========
@@ -1363,7 +1403,7 @@ function Sift:CreateWindow(opts)
             CanvasSize = UDim2.new(0, 0, 0, 0),
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
             Visible = false,
-            ClipsDescendants = false,
+            ClipsDescendants = true,   -- prevent content bleeding into titlebar when scrolled
         })
         padding(page, 12)
         new("UIListLayout", {
@@ -2003,9 +2043,13 @@ function Sift:CreateWindow(opts)
 
             local color, api = default, {}
 
+            -- Convert default RGB to HSV for initial picker state
+            local h, s, v = Color3.toHSV(default)
+
+            -- ============== POPUP ==============
             local popup = new("Frame", {
                 Parent = gui,
-                Size = SUDim2(0, 180, 0, 96),
+                Size = SUDim2(0, 200, 0, 180),
                 BackgroundColor3 = Sift.Theme.SurfaceLight,
                 BorderSizePixel = 0,
                 Visible = false,
@@ -2013,39 +2057,230 @@ function Sift:CreateWindow(opts)
             })
             corner(popup, 6)
             stroke(popup, Sift.Theme.Accent, 1, 0.3)
-            padding(popup, 8)
-            new("UIListLayout", { Parent = popup, Padding = UDim.new(0, S(6)) })
+            padding(popup, 10)
 
-            local function makeChan(label, init)
-                local row = new("Frame", { Parent = popup, Size = UDim2.new(1, 0, 0, S(18)), BackgroundTransparency = 1, ZIndex = 51 })
-                new("TextLabel", { Parent = row, Size = SUDim2(0, 14, 1, 0), BackgroundTransparency = 1, Font = Sift.Theme.FontBold, Text = label, TextColor3 = Sift.Theme.Accent, TextSize = S(11), ZIndex = 52 })
-                local box = new("TextBox", {
-                    Parent = row, Size = UDim2.new(1, -S(22), 1, 0), Position = UDim2.new(0, S(18), 0, 0),
-                    BackgroundColor3 = Sift.Theme.Background, BorderSizePixel = 0,
-                    Font = Sift.Theme.Font, Text = tostring(init), TextColor3 = Sift.Theme.TextPrimary, TextSize = S(11), ZIndex = 52,
-                })
-                corner(box, 3)
-                stroke(box, Sift.Theme.Border, 1, 0.4)
-                return box
-            end
-            local r = makeChan("R", math.floor(default.R * 255))
-            local g = makeChan("G", math.floor(default.G * 255))
-            local b = makeChan("B", math.floor(default.B * 255))
+            -- Saturation/Value square (top, fills width)
+            local svBox = new("Frame", {
+                Parent = popup,
+                Size = UDim2.new(1, 0, 0, S(120)),
+                Position = UDim2.new(0, 0, 0, 0),
+                BackgroundColor3 = Color3.fromHSV(h, 1, 1),  -- pure hue
+                BorderSizePixel = 0,
+                ZIndex = 51,
+            })
+            corner(svBox, 4)
+            -- White → transparent gradient (left to right) gives the saturation axis
+            local satGrad = new("UIGradient", {
+                Parent = svBox,
+                Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+                    ColorSequenceKeypoint.new(1, Color3.fromHSV(h, 1, 1)),
+                }),
+            })
+            -- Black overlay (top to bottom) gives the value axis
+            local valOverlay = new("Frame", {
+                Parent = svBox,
+                Size = UDim2.new(1, 0, 1, 0),
+                BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+                BackgroundTransparency = 0,
+                BorderSizePixel = 0,
+                ZIndex = 52,
+            })
+            corner(valOverlay, 4)
+            new("UIGradient", {
+                Parent = valOverlay,
+                Rotation = 90,
+                Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 1),
+                    NumberSequenceKeypoint.new(1, 0),
+                }),
+            })
 
-            local function commit()
-                local rv = math.clamp(tonumber(r.Text) or 0, 0, 255)
-                local gv = math.clamp(tonumber(g.Text) or 0, 0, 255)
-                local bv = math.clamp(tonumber(b.Text) or 0, 0, 255)
-                color = Color3.fromRGB(rv, gv, bv)
+            -- SV cursor
+            local svCursor = new("Frame", {
+                Parent = svBox,
+                Size = SUDim2(0, 10, 0, 10),
+                Position = UDim2.new(s, 0, 1 - v, 0),
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                BorderSizePixel = 0,
+                ZIndex = 53,
+            })
+            corner(svCursor, 5)
+            stroke(svCursor, Color3.fromRGB(0, 0, 0), 1, 0.3)
+
+            -- Hue strip (bottom, fills width)
+            local hueBox = new("Frame", {
+                Parent = popup,
+                Size = UDim2.new(1, 0, 0, S(14)),
+                Position = UDim2.new(0, 0, 0, S(128)),
+                BackgroundColor3 = Color3.fromRGB(255, 0, 0),
+                BorderSizePixel = 0,
+                ZIndex = 51,
+            })
+            corner(hueBox, 4)
+            new("UIGradient", {
+                Parent = hueBox,
+                Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255,   0,   0)),
+                    ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255,   0)),
+                    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(  0, 255,   0)),
+                    ColorSequenceKeypoint.new(0.50, Color3.fromRGB(  0, 255, 255)),
+                    ColorSequenceKeypoint.new(0.67, Color3.fromRGB(  0,   0, 255)),
+                    ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255,   0, 255)),
+                    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255,   0,   0)),
+                }),
+            })
+
+            -- Hue cursor
+            local hueCursor = new("Frame", {
+                Parent = hueBox,
+                Size = UDim2.new(0, 4, 1, 4),
+                Position = UDim2.new(h, 0, 0.5, 0),
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                BorderSizePixel = 0,
+                ZIndex = 53,
+            })
+            corner(hueCursor, 2)
+            stroke(hueCursor, Color3.fromRGB(0, 0, 0), 1, 0.3)
+
+            -- Color preview + hex (bottom row)
+            local previewRow = new("Frame", {
+                Parent = popup,
+                Size = UDim2.new(1, 0, 0, S(22)),
+                Position = UDim2.new(0, 0, 0, S(150)),
+                BackgroundTransparency = 1,
+                ZIndex = 51,
+            })
+
+            local preview = new("Frame", {
+                Parent = previewRow,
+                Size = UDim2.new(0, S(22), 1, 0),
+                BackgroundColor3 = default,
+                BorderSizePixel = 0,
+                ZIndex = 52,
+            })
+            corner(preview, 4)
+            stroke(preview, Sift.Theme.Border, 1, 0.4)
+
+            local hexBox = new("TextBox", {
+                Parent = previewRow,
+                Size = UDim2.new(1, -S(28), 1, 0),
+                Position = UDim2.new(1, 0, 0, 0),
+                AnchorPoint = Vector2.new(1, 0),
+                BackgroundColor3 = Sift.Theme.Background,
+                BorderSizePixel = 0,
+                Font = Sift.Theme.Font,
+                Text = string.format("#%02X%02X%02X",
+                    math.floor(default.R * 255),
+                    math.floor(default.G * 255),
+                    math.floor(default.B * 255)),
+                TextColor3 = Sift.Theme.TextPrimary,
+                TextSize = S(11),
+                ClearTextOnFocus = false,
+                ZIndex = 52,
+            })
+            corner(hexBox, 4)
+            stroke(hexBox, Sift.Theme.Border, 1, 0.4)
+            padding(hexBox, 6)
+
+            -- ============== UPDATE LOGIC ==============
+            local function updateFromHSV()
+                color = Color3.fromHSV(h, s, v)
                 swatch.BackgroundColor3 = color
+                preview.BackgroundColor3 = color
+                hexBox.Text = string.format("#%02X%02X%02X",
+                    math.floor(color.R * 255 + 0.5),
+                    math.floor(color.G * 255 + 0.5),
+                    math.floor(color.B * 255 + 0.5))
+                -- Also update the SV box's hue tint
+                svBox.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+                satGrad.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+                    ColorSequenceKeypoint.new(1, Color3.fromHSV(h, 1, 1)),
+                })
                 if flag then Sift.Flags[flag] = color end
                 if opts.Callback then pcall(opts.Callback, color) end
             end
-            r.FocusLost:Connect(commit); g.FocusLost:Connect(commit); b.FocusLost:Connect(commit)
 
+            -- ============== SV DRAG ==============
+            local svDragging = false
+            local function svUpdate(input)
+                local rel = input.Position - svBox.AbsolutePosition
+                local sx = math.clamp(rel.X / svBox.AbsoluteSize.X, 0, 1)
+                local sy = math.clamp(rel.Y / svBox.AbsoluteSize.Y, 0, 1)
+                s = sx
+                v = 1 - sy
+                svCursor.Position = UDim2.new(sx, 0, sy, 0)
+                updateFromHSV()
+            end
+            svBox.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                    svDragging = true
+                    svUpdate(input)
+                end
+            end)
+
+            -- ============== HUE DRAG ==============
+            local hueDragging = false
+            local function hueUpdate(input)
+                local rel = input.Position.X - hueBox.AbsolutePosition.X
+                h = math.clamp(rel / hueBox.AbsoluteSize.X, 0, 1)
+                hueCursor.Position = UDim2.new(h, 0, 0.5, 0)
+                updateFromHSV()
+            end
+            hueBox.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                    hueDragging = true
+                    hueUpdate(input)
+                end
+            end)
+
+            UserInputService.InputChanged:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch then
+                    if svDragging then svUpdate(input) end
+                    if hueDragging then hueUpdate(input) end
+                end
+            end)
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                    svDragging = false
+                    hueDragging = false
+                end
+            end)
+
+            -- ============== HEX TYPE-IN ==============
+            hexBox.FocusLost:Connect(function()
+                local txt = hexBox.Text:gsub("#", ""):gsub("%s", "")
+                if #txt == 6 then
+                    local rv = tonumber(txt:sub(1, 2), 16)
+                    local gv = tonumber(txt:sub(3, 4), 16)
+                    local bv = tonumber(txt:sub(5, 6), 16)
+                    if rv and gv and bv then
+                        color = Color3.fromRGB(rv, gv, bv)
+                        h, s, v = Color3.toHSV(color)
+                        svCursor.Position = UDim2.new(s, 0, 1 - v, 0)
+                        hueCursor.Position = UDim2.new(h, 0, 0.5, 0)
+                        updateFromHSV()
+                        return
+                    end
+                end
+                -- invalid → restore display
+                hexBox.Text = string.format("#%02X%02X%02X",
+                    math.floor(color.R * 255 + 0.5),
+                    math.floor(color.G * 255 + 0.5),
+                    math.floor(color.B * 255 + 0.5))
+            end)
+
+            -- ============== POPUP OPEN/CLOSE ==============
             local function reposition()
-                local p, s = swatch.AbsolutePosition, swatch.AbsoluteSize
-                popup.Position = UDim2.new(0, p.X + s.X - S(180), 0, p.Y + s.Y + 4)
+                local p, sz = swatch.AbsolutePosition, swatch.AbsoluteSize
+                popup.Position = UDim2.new(0, p.X + sz.X - S(200), 0, p.Y + sz.Y + 4)
             end
             swatch.MouseButton1Click:Connect(function()
                 if popup.Visible then popup.Visible = false
@@ -2059,15 +2294,18 @@ function Sift:CreateWindow(opts)
                     local p2, s2 = swatch.AbsolutePosition, swatch.AbsoluteSize
                     local inP = mp.X >= p1.X and mp.X <= p1.X + s1.X and mp.Y >= p1.Y and mp.Y <= p1.Y + s1.Y
                     local inB = mp.X >= p2.X and mp.X <= p2.X + s2.X and mp.Y >= p2.Y and mp.Y <= p2.Y + s2.Y
-                    if not inP and not inB then popup.Visible = false end
+                    if not inP and not inB and not svDragging and not hueDragging then
+                        popup.Visible = false
+                    end
                 end
             end)
+
             function api:Set(c)
-                color = c; swatch.BackgroundColor3 = c
-                r.Text = tostring(math.floor(c.R * 255))
-                g.Text = tostring(math.floor(c.G * 255))
-                b.Text = tostring(math.floor(c.B * 255))
-                if flag then Sift.Flags[flag] = c end
+                color = c
+                h, s, v = Color3.toHSV(c)
+                svCursor.Position = UDim2.new(s, 0, 1 - v, 0)
+                hueCursor.Position = UDim2.new(h, 0, 0.5, 0)
+                updateFromHSV()
             end
             function api:Get() return color end
             if flag then Sift.Flags[flag] = color end
